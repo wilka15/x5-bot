@@ -3,16 +3,14 @@ import sys
 import logging
 from datetime import datetime
 
-# ====== ФИКС ДЛЯ WINDOWS (для Python 3.14) ======
+# ====== ФИКС ДЛЯ WINDOWS (для совместимости) ======
 if sys.platform == "win32":
     try:
-        # Пытаемся использовать старый политик (для совместимости)
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     except Exception:
-        pass  # Если не работает - пропускаем
+        pass
 
 # ====== ИМПОРТЫ ======
-import aiohttp
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.client.session.aiohttp import AiohttpSession
@@ -27,21 +25,12 @@ from scheduler import init_scheduler
 # ====== НАСТРОЙКА ЛОГИРОВАНИЯ ======
 logging.basicConfig(level=logging.INFO)
 
-# ====== СОЗДАНИЕ СЕССИИ С УВЕЛИЧЕННЫМИ ТАЙМАУТАМИ ======
-timeout = aiohttp.ClientTimeout(
-    total=60,  # общий таймаут на весь запрос
-    connect=30,  # таймаут установки соединения
-    sock_connect=30,  # таймаут подключения сокета
-    sock_read=30  # таймаут чтения данных
-)
-
-# Создаем сессию с таймаутом
-session = AiohttpSession(timeout=timeout)
+# ====== СОЗДАНИЕ СЕССИИ (УПРОЩЁННО) ======
+session = AiohttpSession()
 
 # ====== ИНИЦИАЛИЗАЦИЯ БОТА ======
 bot = Bot(token=BOT_TOKEN, session=session)
 dp = Dispatcher()
-
 
 # ====== ОБРАБОТЧИКИ КОМАНД ======
 
@@ -59,7 +48,6 @@ async def cmd_start(message: types.Message):
         "/set_city Москва"
     )
     await message.answer(text)
-
 
 @dp.message(Command("balance"))
 async def cmd_balance(message: types.Message):
@@ -82,7 +70,6 @@ async def cmd_balance(message: types.Message):
     except ValueError:
         await message.answer("❌ Это не число. Напиши: /balance 1500")
 
-
 @dp.message(Command("set_city"))
 async def cmd_set_city(message: types.Message):
     city = message.text.replace("/set_city", "").strip()
@@ -91,7 +78,6 @@ async def cmd_set_city(message: types.Message):
         return
     set_city(message.from_user.id, city)
     await message.answer(f"✅ Город сохранён: {city}. Теперь я буду показывать цены для этого города.")
-
 
 @dp.message(Command("recommend"))
 async def cmd_recommend(message: types.Message):
@@ -105,7 +91,7 @@ async def cmd_recommend(message: types.Message):
 
     product_list = "\n".join([f"• {p['name']} — {p['price']} руб" for p in result["products"]])
     text = (
-        f"🍊 У вас {balance} баллов ({balance // 10} руб.)\n"
+        f"🍊 У вас {balance} баллов ({balance//10} руб.)\n"
         f"⚠️ За 1 раз можно списать максимум {MAX_SPEND_RUB_PER_CHECK} руб. (200 баллов)\n\n"
         f"🛒 Рекомендую взять:\n{product_list}\n"
         f"💰 Итого: {result['total_price']} руб.\n"
@@ -113,10 +99,9 @@ async def cmd_recommend(message: types.Message):
         f"💵 Вам останется заплатить: {result['user_pays']} руб.\n"
     )
     if result["remaining_balls"] > 0:
-        text += f"\n❗ Остаток баллов после списания: {result['remaining_balls']} баллов ({result['remaining_balls'] // 10} руб.)"
+        text += f"\n❗ Остаток баллов после списания: {result['remaining_balls']} баллов ({result['remaining_balls']//10} руб.)"
         text += f"\nВы сможете потратить их за несколько походов в магазин."
     await message.answer(text)
-
 
 @dp.message(Command("check"))
 async def cmd_check(message: types.Message):
@@ -146,18 +131,15 @@ async def cmd_check(message: types.Message):
     )
     await message.answer(text)
 
-
 @dp.message(Command("notify_on"))
 async def cmd_notify_on(message: types.Message):
     set_notify(message.from_user.id, True)
     await message.answer("✅ Уведомления о сгорании включены!")
 
-
 @dp.message(Command("notify_off"))
 async def cmd_notify_off(message: types.Message):
     set_notify(message.from_user.id, False)
     await message.answer("🔕 Уведомления о сгорании выключены.")
-
 
 @dp.message()
 async def unknown_command(message: types.Message):
@@ -172,17 +154,11 @@ async def unknown_command(message: types.Message):
         "/notify_on / notify_off — включить/выключить напоминания"
     )
 
-
 # ====== ЗАПУСК ======
 async def main():
-    # Инициализация базы данных
     init_db()
     logging.info("Бот запущен!")
-
-    # Запуск планировщика
     init_scheduler(bot)
-
-    # Запуск бота с автоматическим переподключением
     while True:
         try:
             await dp.start_polling(bot)
@@ -192,7 +168,6 @@ async def main():
         except Exception as e:
             logging.error(f"Неизвестная ошибка: {e}. Перезапуск через 10 секунд...")
             await asyncio.sleep(10)
-
 
 if __name__ == "__main__":
     asyncio.run(main())
